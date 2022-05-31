@@ -1,11 +1,15 @@
+#from yaml import load
 import tensorflow as tf
 import numpy as np
 import json
 import logging
 import os
 import scipy.io as sio
+import scipy
 from scipy import sparse
+import json 
 import math
+from pathlib import Path
 from operator import itemgetter
 
 
@@ -31,7 +35,82 @@ def load_data(mat_file_name, is_to_dense=True):
             test_data = test_data.toarray()
         test_data = test_data.astype('float32')
 
+    print(type(word_embeddings), word_embeddings.shape)
     return train_data, test_data, word_embeddings, voc
+
+def load_glove_model(modelpath, words):
+    embeds = {}
+    for word in words: 
+        embeds[word] = np.random.random(50)
+
+    with open(modelpath) as f: 
+        for line in f: 
+            tokens = line.split()
+            word = tokens[0]
+            embed = np.array(tokens[1:], dtype=np.float64) 
+            if word in embeds: 
+                embeds[word] = embed
+    
+    
+    word_embeddings = np.array(list(embeds.values()))
+    print(word_embeddings.shape, len(words))
+    assert(len(words) == word_embeddings.shape[0])
+
+    return word_embeddings
+
+def load_data_modified(
+    model_path="glove",
+    is_to_dense=True,
+    train_dtm_path="train.dtm.npz",
+    test_dtm_path="test.dtm.npz",
+    embeds_path=None, 
+    vocab_path="vocab.json",
+    ):
+    
+    """
+    Load data to pass into the nstm model. 
+
+    returns -- train_data, test_data, word_embeddings, vec
+    """
+    
+    #load document topic matrices
+    train_data = scipy.sparse.load_npz(train_dtm_path)
+    test_data = scipy.sparse.load_npz(test_dtm_path)
+    
+
+    #load vocabulary 
+    with open(vocab_path) as f :
+        vocab = json.load(f)
+    
+    voc = list(vocab.keys())
+    
+    # get embeddings 
+    if embeds_path.exists(): 
+        word_embeddings = np.load(embeds_path)
+        print("loaded embeddings")
+    else : 
+        print("Creating embeddings") 
+        word_embeddings = load_glove_model(model_path, voc)
+        Path(embeds_path).parent.mkdir(parents=True, exist_ok=True)
+        np.save(embeds_path, word_embeddings)
+        print("Created and saved embeddings")
+
+    assert(len(voc) == word_embeddings.shape[0])
+
+
+    if is_to_dense:
+        if sparse.isspmatrix(train_data):
+            train_data = train_data.toarray()
+        train_data = train_data.astype('float32')
+
+        if sparse.isspmatrix(test_data):
+            test_data = test_data.toarray()
+        test_data = test_data.astype('float32')
+
+    #print(type(word_embeddings), word_embeddings.shape)
+    return train_data, test_data, word_embeddings, voc
+
+
 
 
 
@@ -156,7 +235,7 @@ def get_doc_topic(sess, doc_topic_tf, doc_word_tf, doc_word, K, other_param_tf=N
 
     return doc_topic
 
-def print_topics(topic_word_mat, voc, doc_topic_mat=None, sample_doc_word_mat=None, top_words_N=10, top_docs_N=2,
+def print_topics(topic_word_mat, voc, doc_topic_mat=None, sample_doc_word_mat=None, top_words_N=50, top_docs_N=10,
                  printer=None):
     if printer == None:
         printer = print
@@ -180,7 +259,7 @@ def print_topics(topic_word_mat, voc, doc_topic_mat=None, sample_doc_word_mat=No
 
         top_words = itemgetter(*top_word_idx)(voc)
 
-        printer('topic %d: [%s]\n' % (k, ', '.join(map(str, top_words))))
+        printer('topic_%d:\t[%s]\n' % (k, ', '.join(map(str, top_words))))
 
         if doc_topic_mat is not None:
 
