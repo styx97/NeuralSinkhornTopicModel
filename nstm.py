@@ -134,6 +134,8 @@ def run_ntsm(args):
 
                 if sparse.isspmatrix(X):
                     X = X.toarray()
+                
+                #print(type(X), type(word_embeddings), type(FLAGS.rec_loss_weight))
                 batch_start_time = time.time()
                 _, rec_loss_batch, sh_rec_loss_batch, joint_loss_batch = \
                     sess.run([trainer, rec_loss, sh_loss, joint_loss],
